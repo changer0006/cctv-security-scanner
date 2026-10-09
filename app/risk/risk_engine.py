@@ -9,55 +9,42 @@ SEVERITY_WEIGHTS = {
 
 
 def score_findings(findings: list[dict]) -> dict:
-    """
-    Calculate a transparent, heuristic risk score from findings.
+    """Prioritize security findings using a transparent heuristic."""
 
-    This is a prioritization score, not a probability or CVSS score.
-    Repeated findings of the same severity have diminishing impact.
-    """
-
-    normalized = []
+    unique_findings = []
     seen = set()
 
     for finding in findings:
-        severity = str(
-            finding.get("severity", "INFO")
-        ).upper()
+        item = finding.copy()
+        severity = str(item.get("severity", "INFO")).upper()
 
         if severity not in SEVERITY_WEIGHTS:
             severity = "INFO"
 
-        # Avoid counting the same finding ID repeatedly.
-        finding_id = finding.get("id") or finding.get("cve_id")
+        item["severity"] = severity
 
         identity = (
-            finding.get("target"),
-            finding_id,
-            finding.get("port"),
+            item.get("target", ""),
+            item.get("id", item.get("cve_id", item.get("title", ""))),
+            item.get("port"),
         )
 
         if identity in seen:
             continue
 
         seen.add(identity)
-        normalized.append({
-            **finding,
-            "severity": severity,
-        })
+        unique_findings.append(item)
 
-    # Use the strongest finding as the base and add diminishing
-    # contributions from additional findings.
-    weights = sorted(
-        (
-            SEVERITY_WEIGHTS[item["severity"]]
-            for item in normalized
-        ),
+    ordered = sorted(
+        unique_findings,
+        key=lambda item: SEVERITY_WEIGHTS[item["severity"]],
         reverse=True,
     )
 
     score = 0.0
 
-    for index, weight in enumerate(weights):
+    for index, finding in enumerate(ordered):
+        weight = SEVERITY_WEIGHTS[finding["severity"]]
         score += weight * (0.5 ** index)
 
     score = min(round(score), 100)
@@ -75,7 +62,7 @@ def score_findings(findings: list[dict]) -> dict:
 
     severity_counts = {
         severity: sum(
-            1 for item in normalized
+            1 for item in unique_findings
             if item["severity"] == severity
         )
         for severity in SEVERITY_WEIGHTS
@@ -84,8 +71,10 @@ def score_findings(findings: list[dict]) -> dict:
     return {
         "risk_score": score,
         "risk_level": level,
-        "finding_count": len(normalized),
+        "finding_count": len(unique_findings),
         "severity_counts": severity_counts,
-        "scoring_method": "heuristic prioritization; not CVSS or probability",
-        "findings": normalized,
+        "scoring_method": (
+            "Heuristic prioritization; not CVSS or probability"
+        ),
+        "findings": unique_findings,
     }
