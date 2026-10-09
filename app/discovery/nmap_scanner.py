@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -9,27 +10,32 @@ def scan_host(target: str) -> dict:
     and return structured information.
     """
 
-    with tempfile.NamedTemporaryFile(suffix=".xml") as temp_file:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        xml_path = os.path.join(temp_dir, "scan.xml")
 
         command = [
             "nmap",
             "-sV",
             "-oX",
-            temp_file.name,
+            xml_path,
             target
         ]
 
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False
-        )
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+        except FileNotFoundError:
+            raise RuntimeError("Nmap executable not found. Please ensure nmap is installed and added to PATH.")
 
         if result.returncode != 0:
-            raise RuntimeError(result.stderr)
+            error_msg = result.stderr.strip() or result.stdout.strip() or f"Nmap exited with code {result.returncode}"
+            raise RuntimeError(error_msg)
 
-        tree = ET.parse(temp_file.name)
+        tree = ET.parse(xml_path)
         root = tree.getroot()
 
         host = root.find("host")
