@@ -1,6 +1,6 @@
 
 import ipaddress
-
+from app.database.db import save_scan
 from app.discovery.network_discovery import discover_hosts
 from app.discovery.nmap_scanner import scan_host
 from app.pipeline import analyze_scan, save_report
